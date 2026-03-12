@@ -87,6 +87,7 @@ with st.sidebar:
     - ⭐ NPS 淨推薦值
     - 🛒 產品親和力矩陣  
     - 📊 轉化率漏斗
+    - 🔮 3D 分析整合
     """)
     st.divider()
     st.caption("Powered by PySpark MLlib + Streamlit")
@@ -140,20 +141,42 @@ with tab1:
     with c1:
         st.subheader("📈 月度營收趨勢")
         fig_rev = px.area(df_finance, x='order_month', y='net_revenue', title="Revenue Trend", markers=True)
-        fig_rev.update_layout(height=350, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color='#ccc')
+        fig_rev.update_layout(height=300, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color='#ccc')
         st.plotly_chart(fig_rev, use_container_width=True)
     with c2:
         st.subheader("🏷️ 品牌營收佔比")
         brand_rev = df_brand.groupby('brand')['total_revenue'].sum().reset_index()
         fig_pie = px.pie(brand_rev, values='total_revenue', names='brand', hole=0.4, title="Brand Revenue")
-        fig_pie.update_layout(height=350, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color='#ccc')
+        fig_pie.update_layout(height=300, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color='#ccc')
         st.plotly_chart(fig_pie, use_container_width=True)
+    
+    st.divider()
+    st.subheader("🔮 3D 財務趨勢")
+    finance_cols = [c for c in ['gross_revenue', 'net_revenue', 'gross_profit'] if c in df_finance.columns]
+    if len(finance_cols) >= 2:
+        fig_fin_3d = go.Figure(data=[go.Scatter3d(
+            x=list(range(len(df_finance))),
+            y=df_finance[finance_cols[0]].fillna(0),
+            z=df_finance[finance_cols[1]].fillna(0),
+            mode='markers',
+            marker=dict(size=8, color=df_finance[finance_cols[0]], colorscale='Viridis', opacity=0.8)
+        )])
+        fig_fin_3d.update_layout(
+            title="財務 3D 視圖",
+            scene=dict(
+                xaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text='月份索引', font=dict(color="#00D4FF"))),
+                yaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text=finance_cols[0], font=dict(color="#00D4FF"))),
+                zaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text=finance_cols[1], font=dict(color="#00D4FF"))),
+            ),
+            paper_bgcolor="#0E1117", font=dict(color="#ccc"), height=600
+        )
+        st.plotly_chart(fig_fin_3d, use_container_width=True)
 
 with tab2:
     st.header("🛡️ 流失預警中心 (Churn Prediction)")
     st.markdown("基於客戶最後購買距今天數，AI 自動分類為 **Active (活躍)** / **Dormant (沉睡)** / **At Risk (危險)** / **Churned (已流失)**。")
     
-    c1, c2 = st.columns([1, 1])
+    c1, c2 = st.columns(2)
     with c1:
         churn_counts = df_churn['churn_risk'].value_counts().reset_index()
         fig_churn = px.pie(churn_counts, values='count', names='churn_risk', hole=0.5,
@@ -167,6 +190,34 @@ with tab2:
                                   color_discrete_map={'Active': '#00CC96', 'Dormant': '#AB63FA'})
             fig_days.update_layout(title="最後購買距今天數分布", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color='#ccc')
             st.plotly_chart(fig_days, use_container_width=True)
+    
+    st.divider()
+    st.subheader("🔮 3D 客戶流失分析")
+    if all(col in df_churn.columns for col in ['recency', 'frequency', 'monetary']):
+        fig_churn_3d = go.Figure(data=[go.Scatter3d(
+            x=df_churn['recency'],
+            y=df_churn['frequency'],
+            z=df_churn['monetary'],
+            mode='markers',
+            marker=dict(
+                size=6,
+                color=df_churn['churn_risk'].map({'Active': 0, 'Dormant': 1, 'At Risk': 2, 'Churned': 3}),
+                colorscale=[[0, '#00CC96'], [0.33, '#AB63FA'], [0.66, '#FFA15A'], [1, '#EF553B']],
+                opacity=0.8
+            ),
+            text=df_churn.get('name', 'Customer'),
+            hovertemplate='<b>Customer:</b> %{text}<br><b>Recency:</b> %{x}<br><b>Frequency:</b> %{y}<br><b>Monetary:</b> %{z}<extra></extra>'
+        )])
+        fig_churn_3d.update_layout(
+            title="3D 客戶流失預測",
+            scene=dict(
+                xaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text='Recency (天)', font=dict(color="#00D4FF"))),
+                yaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text='Frequency (次)', font=dict(color="#00D4FF"))),
+                zaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text='Monetary ($)', font=dict(color="#00D4FF"))),
+            ),
+            paper_bgcolor="#0E1117", font=dict(color="#ccc"), height=600
+        )
+        st.plotly_chart(fig_churn_3d, use_container_width=True)
     
     st.subheader("🚨 高風險流失客戶名單 (At Risk + Churned)")
     at_risk = df_churn[df_churn['churn_risk'].isin(['At Risk', 'Churned'])].sort_values('days_since_last', ascending=False).head(15).reset_index(drop=True)
@@ -196,27 +247,82 @@ with tab3:
         st.metric("NPS 分數", f"{nps_score:.1f}")
     with c2:
         st.metric("總用戶", f"{total_users:,}")
+    
+    st.divider()
+    st.subheader("🔮 3D NPS 分析")
+    if all(col in df_rfm.columns for col in ['recency', 'frequency', 'monetary']):
+        df_nps_3d = df_rfm.merge(df_nps, on='user_id', how='left') if 'user_id' in df_rfm.columns and 'user_id' in df_nps.columns else df_rfm
+        fig_nps_3d = go.Figure(data=[go.Scatter3d(
+            x=df_nps_3d['recency'] if 'recency' in df_nps_3d.columns else df_rfm['recency'],
+            y=df_nps_3d['frequency'] if 'frequency' in df_nps_3d.columns else df_rfm['frequency'],
+            z=df_nps_3d['monetary'] if 'monetary' in df_nps_3d.columns else df_rfm['monetary'],
+            mode='markers',
+            marker=dict(size=6, color='#00CC96', opacity=0.8)
+        )])
+        fig_nps_3d.update_layout(
+            title="3D NPS 客戶視圖",
+            scene=dict(
+                xaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text='Recency', font=dict(color="#00D4FF"))),
+                yaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text='Frequency', font=dict(color="#00D4FF"))),
+                zaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text='Monetary', font=dict(color="#00D4FF"))),
+            ),
+            paper_bgcolor="#0E1117", font=dict(color="#ccc"), height=600
+        )
+        st.plotly_chart(fig_nps_3d, use_container_width=True)
 
 with tab4:
     st.header("🛒 產品親和力矩陣 (Product Affinity)")
     st.markdown("透過關聯規則 (Association Rules) 發現哪些產品經常被一起購買。")
     
     if not df_affinity.empty:
-        st.subheader("🔥 熱門產品組合 (Top 10)")
-        top_rules = df_rules.nlargest(10, 'confidence') if 'confidence' in df_rules.columns else df_rules.head(10)
+        st.subheader("🔥 產品親和力熱力圖")
         
-        display_cols = [c for c in ['antecedent', 'consequent', 'support', 'confidence', 'lift'] if c in top_rules.columns]
+        if all(col in df_affinity.columns for col in ['cat1', 'cat2', 'affinity_score']):
+            affinity_matrix = df_affinity.pivot_table(values='affinity_score', index='cat1', columns='cat2', fill_value=0)
+            fig_heat = px.imshow(affinity_matrix, title="產品親和力矩陣", color_continuous_scale='Blues', aspect='auto')
+            fig_heat.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)', 
+                paper_bgcolor='rgba(0,0,0,0)', 
+                font_color='#ccc',
+                height=600
+            )
+            st.plotly_chart(fig_heat, use_container_width=True)
+        
+        st.subheader("🔥 熱門產品組合 (Top 10)")
+        top_rules = df_affinity.nlargest(10, 'affinity_score') if 'affinity_score' in df_affinity.columns else df_affinity.head(10)
+        display_cols = [c for c in ['cat1', 'cat2', 'co_occurrence_count', 'affinity_score'] if c in top_rules.columns]
         if display_cols:
             st.dataframe(top_rules[display_cols], use_container_width=True)
-        
-        st.subheader("📊 產品親和力熱力圖")
-        if 'antecedent' in df_affinity.columns and 'consequent' in df_affinity.columns:
-            affinity_matrix = df_affinity.pivot_table(values='lift', index='antecedent', columns='consequent', fill_value=0)
-            fig_heat = px.imshow(affinity_matrix, title="產品親和力矩陣", color_continuous_scale='Blues')
-            fig_heat.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color='#ccc')
-            st.plotly_chart(fig_heat, use_container_width=True)
     else:
         st.info("親和力數據載入中...")
+    
+    st.divider()
+    st.subheader("🔮 3D 產品分析")
+    if all(col in df_inventory.columns for col in ['cost_price', 'stock_quantity', 'selling_price']):
+        fig_prod_3d = go.Figure(data=[go.Scatter3d(
+            x=df_inventory['cost_price'],
+            y=df_inventory['stock_quantity'],
+            z=df_inventory['selling_price'],
+            mode='markers',
+            marker=dict(
+                size=8,
+                color=df_inventory['stock_quantity'],
+                colorscale='Viridis',
+                opacity=0.8
+            ),
+            text=df_inventory.get('name', 'Product'),
+            hovertemplate='<b>Product:</b> %{text}<br><b>Cost:</b> %{x}<br><b>Stock:</b> %{y}<br><b>Price:</b> %{z}<extra></extra>'
+        )])
+        fig_prod_3d.update_layout(
+            title="3D 產品庫存分析",
+            scene=dict(
+                xaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text='成本價格 ($)', font=dict(color="#00D4FF"))),
+                yaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text='庫存數量', font=dict(color="#00D4FF"))),
+                zaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text='售價 ($)', font=dict(color="#00D4FF"))),
+            ),
+            paper_bgcolor="#0E1117", font=dict(color="#ccc"), height=600
+        )
+        st.plotly_chart(fig_prod_3d, use_container_width=True)
 
 with tab5:
     st.header("📊 轉化率漏斗分析")
@@ -224,7 +330,7 @@ with tab5:
     
     if not df_journey.empty:
         fig_funnel = px.funnel(df_journey, x='count', y='stage', title="客戶旅程漏斗")
-        fig_funnel.update_layout(height=500, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color='#ccc')
+        fig_funnel.update_layout(height=600, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color='#ccc')
         st.plotly_chart(fig_funnel, use_container_width=True)
         
         st.subheader("📉 各階段流失率")
@@ -232,6 +338,28 @@ with tab5:
         dropoff_df.columns = ['階段', '流失率 %']
         fig_drop = px.bar(dropoff_df, x='流失率 %', y='階段', orientation='h', color='流失率 %', color_continuous_scale='Reds')
         st.plotly_chart(fig_drop, use_container_width=True)
+    
+    st.divider()
+    st.subheader("🔮 3D 漏斗分析")
+    if not df_journey.empty:
+        fig_journey_3d = go.Figure(data=[go.Scatter3d(
+            x=df_journey['stage'].astype('category').cat.codes,
+            y=[1] * len(df_journey),
+            z=df_journey['count'],
+            mode='markers+lines',
+            marker=dict(size=12, color=df_journey['count'], colorscale='Plasma', opacity=0.8),
+            line=dict(color='#00D4FF', width=3)
+        )])
+        fig_journey_3d.update_layout(
+            title="3D 客戶旅程",
+            scene=dict(
+                xaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text='階段', font=dict(color="#00D4FF"))),
+                yaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text='維度', font=dict(color="#00D4FF"))),
+                zaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text='用戶數', font=dict(color="#00D4FF"))),
+            ),
+            paper_bgcolor="#0E1117", font=dict(color="#ccc"), height=600
+        )
+        st.plotly_chart(fig_journey_3d, use_container_width=True)
 
 with tab6:
     st.header("📈 季節性與時間模式分析")
@@ -241,12 +369,35 @@ with tab6:
         st.subheader("📅 每週銷售模式 (Weekday Pattern)")
         sw = df_season_w.sort_values('weekday_order')
         fig_sw = px.bar(sw, x='weekday', y='total_revenue', color='total_revenue', color_continuous_scale='Blues')
+        fig_sw.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color='#ccc')
         st.plotly_chart(fig_sw, use_container_width=True)
     with c2:
         st.subheader("⏰ 每小時銷售模式 (Hourly Pattern)")
         fig_sh = px.line(df_season_h, x='hour', y='total_revenue', markers=True)
         fig_sh.add_vrect(x0=19, x1=22, fillcolor="green", opacity=0.1, annotation_text="黃金時段", annotation_position="top left")
+        fig_sh.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color='#ccc')
         st.plotly_chart(fig_sh, use_container_width=True)
+    
+    st.divider()
+    st.subheader("🔮 3D 季節性分析")
+    if 'hour' in df_season_h.columns and 'total_revenue' in df_season_h.columns:
+        fig_season_3d = go.Figure(data=[go.Scatter3d(
+            x=df_season_h['hour'],
+            y=df_season_h['hour'] % 7,
+            z=df_season_h['total_revenue'],
+            mode='markers',
+            marker=dict(size=12, color=df_season_h['total_revenue'], colorscale='Plasma', opacity=0.8)
+        )])
+        fig_season_3d.update_layout(
+            title="3D 季節性銷售分析",
+            scene=dict(
+                xaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text='小時', font=dict(color="#00D4FF"))),
+                yaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text='星期索引', font=dict(color="#00D4FF"))),
+                zaxis=dict(backgroundcolor="#0a0a15", gridcolor="#00D4FF", showbackground=True, title=dict(text='銷售額', font=dict(color="#00D4FF"))),
+            ),
+            paper_bgcolor="#0E1117", font=dict(color="#ccc"), height=600
+        )
+        st.plotly_chart(fig_season_3d, use_container_width=True)
 
 st.divider()
 st.caption("🏆 3C E-Commerce AI Lakehouse v4 Enterprise | PostgreSQL + MongoDB + PySpark MLlib | Built with Streamlit")
