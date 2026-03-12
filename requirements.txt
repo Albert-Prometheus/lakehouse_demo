@@ -1,0 +1,15 @@
+# ETL / Data Engineering Libraries
+pyspark>=3.5.0
+pandas>=2.1.0
+
+# Database Connectors
+psycopg2-binary>=2.9.9
+pymongo>=4.6.0
+SQLAlchemy>=2.0.29
+
+# Dashboard / Web App
+streamlit>=1.33.0
+plotly>=5.20.0
+
+# Mock Data Generation
+Faker>=24.8.0
