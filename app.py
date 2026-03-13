@@ -8,6 +8,43 @@ from plotly.subplots import make_subplots
 
 st.set_page_config(page_title="3C AI Lakehouse v4 Enterprise", layout="wide", page_icon="🏆")
 
+# Database configuration
+PG_HOST, PG_PORT, PG_DB, PG_USER, PG_PASSWORD = "localhost", "5049", "postgres", "postgres", "admin"
+
+# Cache data loading with TTL of 5 minutes
+@st.cache_data(ttl=300, show_spinner=False)
+def load_table_cached(table_name):
+    """Load table with caching - creates fresh connection each time"""
+    try:
+        conn = psycopg2.connect(
+            host=PG_HOST,
+            port=PG_PORT,
+            database=PG_DB,
+            user=PG_USER,
+            password=PG_PASSWORD
+        )
+        try:
+            df = pd.read_sql(f"SELECT * FROM {table_name}", conn)
+            return df
+        finally:
+            conn.close()
+    except Exception as e:
+        st.error(f"載入失敗 {table_name}: {e}")
+        return pd.DataFrame()
+
+def load_table_with_progress(table_name, progress_bar=None, status_text=None):
+    """Load table with progress tracking"""
+    if progress_bar:
+        progress_bar.progress(0.3)
+    if status_text:
+        status_text.text(f"載入 {table_name}...")
+    
+    df = load_table_cached(table_name)
+    
+    if progress_bar:
+        progress_bar.progress(1.0)
+    return df
+
 st.markdown("""
 <style>
     .stApp { background-color: #0E1117; }
@@ -67,14 +104,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-PG_HOST, PG_PORT, PG_DB, PG_USER, PG_PASSWORD = "localhost", "5049", "postgres", "postgres", "admin"
-
-def load_table(table_name):
-    conn = psycopg2.connect(host=PG_HOST, port=PG_PORT, database=PG_DB, user=PG_USER, password=PG_PASSWORD)
-    df = pd.read_sql(f"SELECT * FROM {table_name}", conn)
-    conn.close()
-    return df
-
 with st.sidebar:
     st.image("https://img.icons8.com/3d-fluency/94/trophy.png", width=70)
     st.title("🏆 企業級數據湖倉 v4")
@@ -92,27 +121,70 @@ with st.sidebar:
     st.divider()
     st.caption("Powered by PySpark MLlib + Streamlit")
 
-try:
-    df_finance = load_table("gold_finance_pl").sort_values("order_month")
-    df_rfm = load_table("gold_rfm_v2")
-    df_clv = load_table("gold_clv")
-    df_abc = load_table("gold_abc")
-    df_brand = load_table("gold_brand")
-    df_churn = load_table("gold_churn")
-    df_price_sens = load_table("gold_price_sensitivity")
-    df_journey = load_table("gold_journey")
-    df_affinity = load_table("gold_affinity")
-    df_nps = load_table("gold_nps")
-    df_season_w = load_table("gold_seasonality_weekly")
-    df_season_h = load_table("gold_seasonality_hour")
-    df_payment = load_table("gold_payment")
-    df_city = load_table("gold_city")
-    df_returns = load_table("gold_returns")
-    df_rules = load_table("gold_ml_association")
-    df_inventory = load_table("gold_inventory_v2")
-except Exception as e:
-    st.error(f"資料載入失敗: {e}")
-    st.stop()
+# Loading progress indicator
+progress_bar = st.progress(0)
+status_text = st.empty()
+status_text.text("準備載入資料...")
+
+# Define tables in load order (critical first)
+tables_to_load = [
+    ("gold_finance_pl", "df_finance"),
+    ("gold_rfm_v2", "df_rfm"),
+    ("gold_churn", "df_churn"),
+    ("gold_brand", "df_brand"),
+    ("gold_nps", "df_nps"),
+    ("gold_clv", "df_clv"),
+    ("gold_abc", "df_abc"),
+    ("gold_price_sensitivity", "df_price_sens"),
+    ("gold_journey", "df_journey"),
+    ("gold_affinity", "df_affinity"),
+    ("gold_seasonality_weekly", "df_season_w"),
+    ("gold_seasonality_hour", "df_season_h"),
+    ("gold_payment", "df_payment"),
+    ("gold_city", "df_city"),
+    ("gold_returns", "df_returns"),
+    ("gold_ml_association", "df_rules"),
+    ("gold_inventory_v2", "df_inventory"),
+]
+
+# Load all tables with progress
+data_frames = {}
+total_tables = len(tables_to_load)
+
+for idx, (table_name, var_name) in enumerate(tables_to_load):
+    progress_bar.progress((idx + 1) / total_tables)
+    status_text.text(f"載入中: {table_name} ({idx+1}/{total_tables})")
+    data_frames[var_name] = load_table_cached(table_name)
+
+# Clear progress bar
+progress_bar.empty()
+status_text.empty()
+
+# Assign to variables
+df_finance = data_frames.get("df_finance", pd.DataFrame())
+df_rfm = data_frames.get("df_rfm", pd.DataFrame())
+df_clv = data_frames.get("df_clv", pd.DataFrame())
+df_abc = data_frames.get("df_abc", pd.DataFrame())
+df_brand = data_frames.get("df_brand", pd.DataFrame())
+df_churn = data_frames.get("df_churn", pd.DataFrame())
+df_price_sens = data_frames.get("df_price_sens", pd.DataFrame())
+df_journey = data_frames.get("df_journey", pd.DataFrame())
+df_affinity = data_frames.get("df_affinity", pd.DataFrame())
+df_nps = data_frames.get("df_nps", pd.DataFrame())
+df_season_w = data_frames.get("df_season_w", pd.DataFrame())
+df_season_h = data_frames.get("df_season_h", pd.DataFrame())
+df_payment = data_frames.get("df_payment", pd.DataFrame())
+df_city = data_frames.get("df_city", pd.DataFrame())
+df_returns = data_frames.get("df_returns", pd.DataFrame())
+df_rules = data_frames.get("df_rules", pd.DataFrame())
+df_inventory = data_frames.get("df_inventory", pd.DataFrame())
+
+# Sort after loading
+if not df_finance.empty and "order_month" in df_finance.columns:
+    df_finance = df_finance.sort_values("order_month")
+
+# Show success message
+st.success(f"✅ 資料載入完成！共 {total_tables} 個資料表")
 
 st.title("🏆 3C 電商企業級 AI 戰情中心")
 
