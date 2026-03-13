@@ -399,29 +399,29 @@ with st.sidebar:
     
     st.markdown("### 📊 功能模組")
     
-    # Feature Navigation
-    st.markdown("""
-    <div style="padding: 8px 0;">
-        <div style="padding: 12px; background: rgba(0, 212, 255, 0.1); border-radius: 8px; border-left: 3px solid #00d4ff; margin: 8px 0;">
-            🏠 戰情儀表板
-        </div>
-        <div style="padding: 12px; background: transparent; border-radius: 8px; border-left: 3px solid transparent; margin: 8px 0; color: #94a3b8;">
-            🛡️ 流失預警中心
-        </div>
-        <div style="padding: 12px; background: transparent; border-radius: 8px; border-left: 3px solid transparent; margin: 8px 0; color: #94a3b8;">
-            ⭐ NPS 客戶滿意度
-        </div>
-        <div style="padding: 12px; background: transparent; border-radius: 8px; border-left: 3px solid transparent; margin: 8px 0; color: #94a3b8;">
-            🛒 產品親和力矩陣
-        </div>
-        <div style="padding: 12px; background: transparent; border-radius: 8px; border-left: 3px solid transparent; margin: 8px 0; color: #94a3b8;">
-            📊 轉化率漏斗
-        </div>
-        <div style="padding: 12px; background: transparent; border-radius: 8px; border-left: 3px solid transparent; margin: 8px 0; color: #94a3b8;">
-            📈 季節性分析
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # Functional Navigation using radio buttons
+    if 'current_tab' not in st.session_state:
+        st.session_state.current_tab = 0
+    
+    nav_options = [
+        "🏠 戰情儀表板",
+        "🛡️ 流失預警中心", 
+        "⭐ NPS 客戶滿意度",
+        "🛒 產品親和力矩陣",
+        "📊 轉化率漏斗",
+        "📈 季節性分析"
+    ]
+    
+    selected_nav = st.radio(
+        "導航",
+        options=nav_options,
+        index=st.session_state.current_tab,
+        label_visibility="collapsed",
+        key="nav_radio"
+    )
+    
+    # Update session state
+    st.session_state.current_tab = nav_options.index(selected_nav)
     
     st.divider()
     
@@ -550,12 +550,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
-# TABS
+# MAIN CONTENT - Navigation
 # ============================================================
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "🏠 戰情儀表板", "🛡️ 流失預警中心", "⭐ NPS 客戶滿意度", 
-    "🛒 產品親和力矩陣", "📊 轉化率漏斗", "📈 季節性分析"
-])
+# Use the selected navigation from sidebar
+tab_idx = st.session_state.current_tab
 
 # Common chart style
 def apply_chart_style(fig, height=350):
@@ -575,7 +573,7 @@ def apply_chart_style(fig, height=350):
 # ============================================================
 # TAB 1: EXECUTIVE DASHBOARD
 # ============================================================
-with tab1:
+if tab_idx == 0:
     st.header("🏠 企業戰情儀表板")
     
     # Key Metrics with Glow
@@ -679,7 +677,7 @@ with tab1:
 # ============================================================
 # TAB 2: CHURN PREDICTION
 # ============================================================
-with tab2:
+elif tab_idx == 1:
     st.header("🛡️ 流失預警中心")
     
     st.markdown("""
@@ -759,7 +757,7 @@ with tab2:
 # ============================================================
 # TAB 3: NPS ANALYSIS
 # ============================================================
-with tab3:
+elif tab_idx == 2:
     st.header("⭐ NPS 淨推薦值分析")
     
     if not df_nps.empty:
@@ -816,7 +814,7 @@ with tab3:
 # ============================================================
 # TAB 4: PRODUCT AFFINITY
 # ============================================================
-with tab4:
+elif tab_idx == 3:
     st.header("🛒 產品親和力矩陣")
     
     if not df_affinity.empty:
@@ -866,7 +864,7 @@ with tab4:
 # ============================================================
 # TAB 5: FUNNEL
 # ============================================================
-with tab5:
+elif tab_idx == 4:
     st.header("📊 轉化率漏斗分析")
     
     if not df_journey.empty:
@@ -909,7 +907,7 @@ with tab5:
 # ============================================================
 # TAB 6: SEASONALITY
 # ============================================================
-with tab6:
+elif tab_idx == 5:
     st.header("📈 季節性與時間模式分析")
     
     c1, c2 = st.columns(2)
