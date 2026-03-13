@@ -155,17 +155,25 @@ st.markdown("""
     
     .stTabs [data-baseweb="tab"] {
         background: transparent;
+        border: 2px solid transparent;
+        border-bottom: none;
         border-radius: 8px 8px 0 0;
         padding: 12px 24px;
         color: var(--text-secondary);
-        transition: all 0.3s ease;
+        transition: all 0.2s ease;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        border-color: var(--border-color);
+        color: var(--text-primary);
     }
     
     .stTabs [data-baseweb="tab"][aria-selected="true"] {
-        background: linear-gradient(135deg, var(--accent-cyan), var(--accent-teal));
-        color: var(--brand-navy) !important;
+        background: transparent !important;
+        color: var(--accent-cyan) !important;
         font-weight: 600;
-        box-shadow: 0 4px 20px var(--accent-cyan-glow);
+        border: 2px solid var(--accent-cyan);
+        border-bottom: none;
     }
     
     /* ===== BUTTONS ===== */
