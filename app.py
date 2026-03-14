@@ -646,10 +646,7 @@ if tab_idx == 0:
                     linestyle_opts=opts.LineStyleOpts(color=COLORS['cyan'], width=3),
                     itemstyle_opts=opts.ItemStyleOpts(color=COLORS['cyan']),
                     areastyle_opts=opts.AreaStyleOpts(
-                        color=opts.LinearGradient(0, 0, 0, 1, [
-                            opts.LinearGradientColorStop(0, "rgba(0, 212, 255, 0.4)"),
-                            opts.LinearGradientColorStop(1, "rgba(0, 212, 255, 0.05)")
-                        ])
+                        color="rgba(0, 212, 255, 0.3)"
                     ),
                 )
                 .set_global_opts(
@@ -716,10 +713,7 @@ if tab_idx == 0:
                     [[x, y, z] for x, y, z in zip(x_data, y_data, z_data)],
                     symbol_size=10,
                     itemstyle_opts=opts.ItemStyleOpts(
-                        color=opts.LinearGradient(0, 0, 1, [
-                            opts.LinearGradientColorStop(0, COLORS['cyan']),
-                            opts.LinearGradientColorStop(1, COLORS['teal'])
-                        ])
+                        color=COLORS['cyan']
                     ),
                 )
                 .set_global_opts(
