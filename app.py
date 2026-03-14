@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import psycopg2
+from sqlalchemy import create_engine
 from pyecharts import options as opts
 from pyecharts.charts import Line, Pie, Bar, Funnel, HeatMap
 from streamlit_echarts import st_echarts
@@ -24,6 +25,57 @@ def chart_to_dict(chart):
         else:
             return obj
     return convert(d)
+
+# ============================================================
+# PROFESSIONAL UI/UX HELPERS
+# ============================================================
+def format_number(num, currency=True):
+    """Format large numbers with K/M/B suffixes for professional display"""
+    if num is None or pd.isna(num):
+        return "N/A"
+    num = float(num)
+    if abs(num) >= 1_000_000_000:
+        return f"${num/1_000_000_000:.1f}B" if currency else f"{num/1_000_000_000:.1f}B"
+    elif abs(num) >= 1_000_000:
+        return f"${num/1_000_000:.1f}M" if currency else f"{num/1_000_000:.1f}M"
+    elif abs(num) >= 1_000:
+        return f"${num/1_000:.1f}K" if currency else f"{num/1_000:.1f}K"
+    else:
+        return f"${num:,.0f}" if currency else f"{num:,.0f}"
+
+def render_kpi_card(label, value, trend=None, trend_value="", icon="", color="cyan"):
+    """Render a professional KPI card with glow effect"""
+    colors = {
+        "cyan": ("#00d4ff", "#00e5c4"),
+        "green": ("#00e676", "#00e5c4"),
+        "red": ("#ef4444", "#ff6b35"),
+        "yellow": ("#ffc107", "#ff6b35"),
+        "purple": ("#7c3aed", "#ec4899")
+    }
+    c1, c2 = colors.get(color, colors["cyan"])
+    
+    trend_html = ""
+    if trend:
+        trend_color = "#00e676" if trend == "up" else "#ef4444"
+        trend_icon = "↑" if trend == "up" else "↓"
+        trend_html = f'<div style="color: {trend_color}; font-size: 12px; margin-top: 8px;">{trend_icon} {trend_value}</div>'
+    
+    return f"""
+    <div class="metric-glow">
+        <div class="metric-label-glow">{icon} {label}</div>
+        <div class="metric-value-glow">{value}</div>
+        {trend_html}
+    </div>
+    """
+
+def render_empty_state(message, icon="📊"):
+    """Render a professional empty state"""
+    return f"""
+    <div class="glass-card" style="text-align: center; padding: 40px;">
+        <div style="font-size: 48px; margin-bottom: 16px;">{icon}</div>
+        <p style="color: #64748b; margin: 0;">{message}</p>
+    </div>
+    """
 
 st.set_page_config(page_title="3C AI Lakehouse v4 Enterprise", layout="wide", page_icon="🏆", initial_sidebar_state="expanded")
 
@@ -339,20 +391,14 @@ st.markdown("""
 # ============================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def load_table_cached(table_name):
-    """Load table with caching - creates fresh connection each time"""
+    """Load table from PostgreSQL with caching"""
     try:
-        conn = psycopg2.connect(
-            host=PG_HOST,
-            port=PG_PORT,
-            database=PG_DB,
-            user=PG_USER,
-            password=PG_PASSWORD
-        )
-        try:
+        # Use SQLAlchemy engine to avoid pandas warning
+        engine = create_engine(f"postgresql://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/{PG_DB}")
+        with engine.connect() as conn:
             df = pd.read_sql(f"SELECT * FROM {table_name}", conn)
-            return df
-        finally:
-            conn.close()
+        engine.dispose()
+        return df if df is not None else pd.DataFrame()
     except Exception as e:
         return pd.DataFrame()
 
@@ -580,8 +626,20 @@ COLORS = {
     'yellow': '#ffc107',
     'red': '#ef4444',
     'purple': '#7c3aed',
-    'orange': '#ff6b35'
+    'orange': '#ff6b35',
+    'pink': '#ec4899',
+    'blue': '#3b82f6',
+    'indigo': '#6366f1',
+    'amber': '#f59e0b',
+    'emerald': '#10b981',
+    'rose': '#f43f5e',
+    'violet': '#8b5cf6',
+    'sky': '#0ea5e9',
+    'lime': '#84cc16'
 }
+
+# Diverse palette for pie charts
+PIE_COLORS = ['#00d4ff', '#00e5c4', '#ef4444', '#7c3aed', '#ffc107', '#ff6b35', '#ec4899', '#3b82f6', '#6366f1', '#f59e0b', '#10b981', '#f43f5e']
 
 # ============================================================
 # TAB 1: EXECUTIVE DASHBOARD
@@ -599,40 +657,16 @@ if tab_idx == 0:
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.markdown(f"""
-        <div class="metric-glow">
-            <div class="metric-label-glow">總營收</div>
-            <div class="metric-value-glow">${total_rev:,.0f}</div>
-            <div style="color: #00e676; font-size: 12px; margin-top: 8px;">↑ +12.5% vs 上月</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(render_kpi_card("總營收", format_number(total_rev), "up", "+12.5%", "💰", "cyan"), unsafe_allow_html=True)
     
     with col2:
-        st.markdown(f"""
-        <div class="metric-glow">
-            <div class="metric-label-glow">毛利</div>
-            <div class="metric-value-glow">${total_gp:,.0f}</div>
-            <div style="color: #00e676; font-size: 12px; margin-top: 8px;">↑ +8.2%</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(render_kpi_card("毛利", format_number(total_gp), "up", "+8.2%", "📈", "green"), unsafe_allow_html=True)
     
     with col3:
-        st.markdown(f"""
-        <div class="metric-glow">
-            <div class="metric-label-glow">活躍用戶</div>
-            <div class="metric-value-glow">{active_users:,}</div>
-            <div style="color: #ef4444; font-size: 12px; margin-top: 8px;">↓ -3.1%</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(render_kpi_card("活躍用戶", format_number(active_users, currency=False), "down", "-3.1%", "👥", "purple"), unsafe_allow_html=True)
     
     with col4:
-        st.markdown(f"""
-        <div class="metric-glow">
-            <div class="metric-label-glow">流失率</div>
-            <div class="metric-value-glow">{churn_rate:.1f}%</div>
-            <div style="color: #ef4444; font-size: 12px; margin-top: 8px;">↑ +0.5%</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(render_kpi_card("流失率", f"{churn_rate:.1f}%", "up", "+0.5%", "⚠️", "red"), unsafe_allow_html=True)
     
     st.divider()
     
@@ -664,66 +698,88 @@ if tab_idx == 0:
                     itemstyle_opts=opts.ItemStyleOpts(color=COLORS['cyan']),
                     areastyle_opts=opts.AreaStyleOpts(
                         color="rgba(0, 212, 255, 0.3)"
-                    ))
+                    ),
+                    label_opts=opts.LabelOpts(is_show=False))
                 .set_global_opts(
-                    title_opts=opts.TitleOpts(title="營收趨勢"),
+                    title_opts=opts.TitleOpts(title="營收趨勢", title_textstyle_opts=opts.TextStyleOpts(color="#f1f5f9")),
                     xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(color="#94a3b8")),
                     yaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(color="#94a3b8")),
-                    tooltip_opts=opts.TooltipOpts(trigger="axis"),
+                    tooltip_opts=opts.TooltipOpts(trigger="axis", background_color="rgba(10, 22, 40, 0.9)", border_color="#00d4ff"),
                     legend_opts=opts.LegendOpts(textstyle_opts=opts.TextStyleOpts(color="#94a3b8")))
             )
             st_echarts(options=chart_to_dict(line_chart), height="350px")
+        else:
+            st.markdown(render_empty_state("暫無營收數據", "📈"), unsafe_allow_html=True)
     
-    with c2:
-        st.subheader("🏷️ 品牌營收佔比")
-        if not df_brand.empty and 'brand' in df_brand.columns and 'total_revenue' in df_brand.columns:
-            brand_rev = df_brand.groupby('brand')['total_revenue'].sum().reset_index()
-            brands = brand_rev['brand'].astype(str).tolist()
-            revenues = brand_rev['total_revenue'].fillna(0).tolist()
-            
-            pie_chart = (
-                Pie()
-                .add(
-                    "",
-                    [list(z) for z in zip(brands, revenues)],
-                    radius=["25%", "80%"],
-                    center=["50%", "45%"],
-                    label_opts=opts.LabelOpts(formatter="{b}\n{d}%", color="#94a3b8", font_size=12))
-                .set_global_opts(
-                    title_opts=opts.TitleOpts(title="品牌營收佔比"),
-                    legend_opts=opts.LegendOpts(textstyle_opts=opts.TextStyleOpts(color="#94a3b8"), orient="horizontal", pos_bottom="0%", item_gap=10))
-                .set_series_opts(
-                    itemstyle_opts=opts.ItemStyleOpts(
-                        border_color="#0a1628",
-                        border_width=2
-                    )
-                )
-            )
-            st_echarts(options=chart_to_dict(pie_chart), height="500px")
+    st.divider()
+    
+    # Brand Revenue - Separate Row
+    st.subheader("🏷️ 品牌營收佔比")
+    if not df_brand.empty and 'brand' in df_brand.columns and 'total_revenue' in df_brand.columns:
+        # Sort by revenue descending
+        brand_rev = df_brand.groupby('brand')['total_revenue'].sum().sort_values(ascending=False)
+        brands = brand_rev.index.astype(str).tolist()
+        revenues = brand_rev.values.tolist()
+        
+        # Simple pie with legend only, no outside labels
+        fig_pie = go.Figure(data=[go.Pie(
+            labels=brands,
+            values=revenues,
+            marker=dict(colors=PIE_COLORS[:len(brands)]),
+            textinfo='label+percent',
+            textposition='inside',
+            textfont=dict(color='#0a1628', size=14, family='Arial Bold'),
+            hovertemplate='<b>%{label}</b><br>營收: %{value:,.0f}<br>佔比: %{percent}<extra></extra>'
+        )])
+        fig_pie.update_layout(
+            title=dict(text='🏷️ 品牌營收佔比', font=dict(color='#f1f5f9', size=20)),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#00d4ff'),
+            height=450,
+            margin=dict(t=80, b=30, l=30, r=30)
+        )
+        st.plotly_chart(fig_pie, width="stretch")
+    else:
+        st.markdown(render_empty_state("暫無品牌營收數據", "🏷️"), unsafe_allow_html=True)
     
     st.divider()
     
     # 3D Section - Using Plotly for 3D
-    with st.expander("🔮 3D 財務趨勢 (進階分析)", expanded=True):
+    with st.expander("🔮 財務趨勢分析 (進階)", expanded=True):
         finance_cols = [c for c in ['gross_revenue', 'net_revenue', 'gross_profit'] if c in df_finance.columns]
         if len(finance_cols) >= 2 and not df_finance.empty:
             fig_3d = go.Figure(data=[go.Scatter3d(
                 x=list(range(len(df_finance))),
                 y=df_finance[finance_cols[0]].fillna(0),
                 z=df_finance[finance_cols[1]].fillna(0),
-                mode='markers',
-                marker=dict(size=8, color='#00d4ff', opacity=0.8)
+                mode='markers+text',
+                marker=dict(
+                    size=10,
+                    color=df_finance[finance_cols[0]].fillna(0),
+                    colorscale='Jet',
+                    opacity=0.85,
+                    colorbar=dict(title=dict(text='金額', font=dict(color="#00d4ff")), tickfont=dict(color="#00d4ff"))
+                ),
+                text=[format_number(v) for v in df_finance[finance_cols[0]].fillna(0)],
+                textposition="top center",
+                textfont=dict(color="#00d4ff", size=10)
             )])
             fig_3d.update_layout(
-                title="3D 財務分析",
+                title=dict(text="🔮 財務趨勢 3D 分析", font=dict(color="#f1f5f9", size=18)),
                 scene=dict(
-                    xaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text='月份', font=dict(color="#00d4ff"))),
-                    yaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text=finance_cols[0], font=dict(color="#00d4ff"))),
-                    zaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text=finance_cols[1], font=dict(color="#00d4ff"))),
+                    xaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text='月份索引', font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
+                    yaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text=finance_cols[0], font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
+                    zaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text=finance_cols[1], font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
                 ),
-                paper_bgcolor="#0a1628", font=dict(color="#94a3b8"), height=500
+                paper_bgcolor="#0a1628",
+                font=dict(color="#94a3b8"),
+                height=550,
+                margin=dict(l=0, r=0, t=50, b=0)
             )
-            st.plotly_chart(fig_3d, use_container_width=True)
+            st.plotly_chart(fig_3d, width="stretch")
+        else:
+            st.markdown(render_empty_state("暫無財務數據", "🔮"), unsafe_allow_html=True)
 
 # ============================================================
 # TAB 2: CHURN PREDICTION
@@ -744,28 +800,28 @@ elif tab_idx == 1:
             churn_risk_list = churn_counts['churn_risk'].astype(str).tolist()
             churn_count_list = churn_counts['count'].tolist()
             
-            color_map = {'Active': COLORS['green'], 'Dormant': COLORS['purple'], 'At Risk': COLORS['yellow'], 'Churned': COLORS['red']}
-            colors = [color_map.get(risk, COLORS['cyan']) for risk in churn_risk_list]
+            churn_colors = {'Active': '#00e676', 'Dormant': '#7c3aed', 'At Risk': '#ffc107', 'Churned': '#ef4444'}
+            colors = [churn_colors.get(risk, '#00d4ff') for risk in churn_risk_list]
             
-            pie_chart = (
-                Pie()
-                .add(
-                    "",
-                    [list(z) for z in zip(churn_risk_list, churn_count_list)],
-                    radius=["40%", "70%"],
-                    center=["50%", "50%"],
-                    label_opts=opts.LabelOpts(formatter="{b}: {c} ({d}%)", color="#94a3b8"))
-                .set_global_opts(
-                    title_opts=opts.TitleOpts(title="客戶流失風險分佈"),
-                    legend_opts=opts.LegendOpts(textstyle_opts=opts.TextStyleOpts(color="#94a3b8"), orient="vertical", pos_left="left"))
-                .set_series_opts(
-                    itemstyle_opts=opts.ItemStyleOpts(
-                        border_color="#0a1628",
-                        border_width=2
-                    )
-                )
+            # Use Plotly for churn pie chart
+            fig_churn_pie = go.Figure(data=[go.Pie(
+                labels=churn_risk_list,
+                values=churn_count_list,
+                marker=dict(colors=colors),
+                textinfo='label+percent',
+                textfont=dict(color='#f1f5f9', size=11),
+                hovertemplate='<b>%{label}</b><br>數量: %{value}<br>佔比: %{percent}<extra></extra>'
+            )])
+            fig_churn_pie.update_layout(
+                title=dict(text='🛡️ 客戶流失風險分佈', font=dict(color='#f1f5f9', size=16)),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='#94a3b8'),
+                showlegend=False,
+                height=350,
+                margin=dict(t=50, b=20, l=20, r=20)
             )
-            st_echarts(options=chart_to_dict(pie_chart), height="350px")
+            st.plotly_chart(fig_churn_pie, width="stretch")
     
     with c2:
         if not df_churn.empty and 'days_since_last' in df_churn.columns:
@@ -783,24 +839,34 @@ elif tab_idx == 1:
                 x_data = [str(interval) for interval in bin_counts.index]
                 y_data = bin_counts.values.tolist()
                 
-                bar_chart = (
-                    Bar()
-                    .add_xaxis(x_data)
-                    .add_yaxis("天數分布", y_data, 
-                              itemstyle_opts=opts.ItemStyleOpts(color=COLORS['cyan']))
-                    .set_global_opts(
-                        title_opts=opts.TitleOpts(title="未購買天數分布"),
-                        xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(color="#94a3b8")),
-                        yaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(color="#94a3b8"),
-                                                splitline_opts=opts.SplitLineOpts(is_show=True, linestyle_opts=opts.LineStyleOpts(color="rgba(30, 58, 95, 0.5)"))),
-                        legend_opts=opts.LegendOpts(textstyle_opts=opts.TextStyleOpts(color="#94a3b8")))
+                # Create gradient colors for bars (green to red based on position)
+                bar_colors = ['#22c55e', '#16a34a', '#84cc16', '#eab308', '#f59e0b', '#f97316', '#ef4444', '#dc2626', '#b91c1c', '#991b1b']
+                
+                # Use Plotly for churn days bar chart
+                fig_churn = go.Figure(data=[go.Bar(
+                    x=x_data,
+                    y=y_data,
+                    marker_color=bar_colors[:len(x_data)],
+                    text=y_data,
+                    textposition='outside',
+                    textfont=dict(color='#f1f5f9')
+                )])
+                fig_churn.update_layout(
+                    title=dict(text='🛡️ 未購買天數分布', font=dict(color='#f1f5f9', size=18)),
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='#94a3b8'),
+                    xaxis=dict(title=dict(text='天數區間', font=dict(color='#00d4ff')), tickfont=dict(color='#00d4ff'), gridcolor='rgba(0, 212, 255, 0.2)'),
+                    yaxis=dict(title=dict(text='客戶數', font=dict(color='#00d4ff')), tickfont=dict(color='#00d4ff'), gridcolor='rgba(0, 212, 255, 0.2)'),
+                    height=350,
+                    margin=dict(t=60, b=40, l=50, r=20)
                 )
-                st_echarts(options=chart_to_dict(bar_chart), height="350px")
+                st.plotly_chart(fig_churn, width="stretch")
     
     st.divider()
     
     # 3D Analysis - Using Plotly
-    with st.expander("🔮 3D 客戶流失分析 (進階)", expanded=True):
+    with st.expander("🔮 客戶流失分析 (進階)", expanded=True):
         if not df_churn.empty and all(col in df_churn.columns for col in ['recency', 'frequency', 'monetary']):
             fig_churn_3d = go.Figure(data=[go.Scatter3d(
                 x=df_churn['recency'],
@@ -808,24 +874,28 @@ elif tab_idx == 1:
                 z=df_churn['monetary'],
                 mode='markers',
                 marker=dict(
-                    size=6,
+                    size=8,
                     color=df_churn['churn_risk'].map({'Active': 0, 'Dormant': 1, 'At Risk': 2, 'Churned': 3}),
                     colorscale=[[0, '#00e676'], [0.33, '#7c3aed'], [0.66, '#ffc107'], [1, '#ef4444']],
-                    opacity=0.8
+                    opacity=0.8,
+                    colorbar=dict(title=dict(text='風險等級', font=dict(color="#00d4ff")), tickfont=dict(color="#00d4ff"), tickvals=[0, 1, 2, 3], ticktext=['Active', 'Dormant', 'At Risk', 'Churned'])
                 ),
                 text=df_churn.get('name', 'Customer'),
                 hovertemplate='<b>%{text}</b><br>R: %{x}<br>F: %{y}<br>M: %{z}<extra></extra>'
             )])
             fig_churn_3d.update_layout(
-                title="3D 客戶流失預測",
+                title=dict(text="🔮 客戶流失 3D 預測", font=dict(color="#f1f5f9", size=18)),
                 scene=dict(
-                    xaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text='Recency', font=dict(color="#00d4ff"))),
-                    yaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text='Frequency', font=dict(color="#00d4ff"))),
-                    zaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text='Monetary', font=dict(color="#00d4ff"))),
+                    xaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text='Recency (天)', font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
+                    yaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text='Frequency (次)', font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
+                    zaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text='Monetary ($)', font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
                 ),
-                paper_bgcolor="#0a1628", font=dict(color="#94a3b8"), height=500
+                paper_bgcolor="#0a1628", font=dict(color="#94a3b8"), height=550,
+                margin=dict(l=0, r=0, t=50, b=0)
             )
-            st.plotly_chart(fig_churn_3d, use_container_width=True)
+            st.plotly_chart(fig_churn_3d, width="stretch")
+        else:
+            st.markdown(render_empty_state("暫無流失數據", "🛡️"), unsafe_allow_html=True)
     
     st.subheader("🚨 高風險流失客戶")
     if not df_churn.empty:
@@ -835,7 +905,7 @@ elif tab_idx == 1:
             if display_cols:
                 at_risk_disp = at_risk[display_cols].copy()
                 at_risk_disp.columns = ['姓名', 'Email', '城市', '會員等級', '未購買天數', '風險等級']
-                st.dataframe(at_risk_disp, use_container_width=True)
+                st.dataframe(at_risk_disp, width="stretch")
     
     st.markdown("""
     <div class="insight-box danger">
@@ -857,24 +927,29 @@ elif tab_idx == 2:
         segments = nps_counts['nps_segment'].astype(str).tolist()
         user_counts = nps_counts['user_count'].tolist()
         
-        color_map = {'Promoter': COLORS['green'], 'Passive': COLORS['yellow'], 'Detractor': COLORS['red']}
-        colors = [color_map.get(seg, COLORS['cyan']) for seg in segments]
+        # Vibrant colors for NPS segments - high contrast
+        nps_colors_list = ['#22c55e', '#eab308', '#ef4444']
         
-        bar_chart = Bar().add_xaxis(segments).add_yaxis(
-            "用戶數", user_counts, 
-            itemstyle_opts=opts.ItemStyleOpts(color=colors)
-        ).set_global_opts(
-            title_opts=opts.TitleOpts(title="NPS 用戶分佈"),
-            xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(color="#94a3b8")),
-            yaxis_opts=opts.AxisOpts(
-                axislabel_opts=opts.LabelOpts(color="#94a3b8"),
-                splitline_opts=opts.SplitLineOpts(is_show=True, linestyle_opts=opts.LineStyleOpts(color="rgba(30, 58, 95, 0.5)"))
-            ),
-            legend_opts=opts.LegendOpts(textstyle_opts=opts.TextStyleOpts(color="#94a3b8"))
-        ).set_series_opts(
-            label_opts=opts.LabelOpts(is_show=True, position="top", color="#94a3b8")
+        # Use Plotly for bar chart with custom colors
+        fig_nps = go.Figure(data=[go.Bar(
+            x=segments,
+            y=user_counts,
+            marker_color=nps_colors_list[:len(segments)],
+            text=user_counts,
+            textposition='outside',
+            textfont=dict(color='#f1f5f9')
+        )])
+        fig_nps.update_layout(
+            title=dict(text='⭐ NPS 用戶分佈', font=dict(color='#f1f5f9', size=18)),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#94a3b8'),
+            xaxis=dict(tickfont=dict(color='#00d4ff')),
+            yaxis=dict(title=dict(text='用戶數', font=dict(color='#00d4ff')), tickfont=dict(color='#00d4ff'), gridcolor='rgba(0, 212, 255, 0.2)'),
+            height=350,
+            margin=dict(t=60, b=40, l=50, r=20)
         )
-        st_echarts(options=chart_to_dict(bar_chart), height="350px")
+        st.plotly_chart(fig_nps, width="stretch")
         
         total_users = nps_counts['user_count'].sum()
         promoters = nps_counts[nps_counts['nps_segment'] == 'Promoter']['user_count'].sum()
@@ -898,25 +973,34 @@ elif tab_idx == 2:
     
     st.divider()
     
-    with st.expander("🔮 3D NPS 分析 (進階)", expanded=True):
+    with st.expander("🔮 NPS 客戶分析 (進階)", expanded=True):
         if not df_rfm.empty and all(col in df_rfm.columns for col in ['recency', 'frequency', 'monetary']):
             fig_nps_3d = go.Figure(data=[go.Scatter3d(
                 x=df_rfm['recency'],
                 y=df_rfm['frequency'],
                 z=df_rfm['monetary'],
                 mode='markers',
-                marker=dict(size=6, color='#00d4ff', opacity=0.8)
+                marker=dict(
+                    size=8,
+                    color=df_rfm['monetary'],
+                    colorscale='Jet',
+                    opacity=0.85,
+                    colorbar=dict(title=dict(text='消費金額', font=dict(color="#00d4ff")), tickfont=dict(color="#00d4ff"))
+                )
             )])
             fig_nps_3d.update_layout(
-                title="3D NPS 客戶視圖",
+                title=dict(text="🔮 NPS 客戶 3D 視圖", font=dict(color="#f1f5f9", size=18)),
                 scene=dict(
-                    xaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text='Recency', font=dict(color="#00d4ff"))),
-                    yaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text='Frequency', font=dict(color="#00d4ff"))),
-                    zaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text='Monetary', font=dict(color="#00d4ff"))),
+                    xaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text='Recency (天)', font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
+                    yaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text='Frequency (次)', font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
+                    zaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text='Monetary ($)', font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
                 ),
-                paper_bgcolor="#0a1628", font=dict(color="#94a3b8"), height=500
+                paper_bgcolor="#0a1628", font=dict(color="#94a3b8"), height=550,
+                margin=dict(l=0, r=0, t=50, b=0)
             )
-            st.plotly_chart(fig_nps_3d, use_container_width=True)
+            st.plotly_chart(fig_nps_3d, width="stretch")
+        else:
+            st.markdown(render_empty_state("暫無 NPS 數據", "⭐"), unsafe_allow_html=True)
 
 # ============================================================
 # TAB 4: PRODUCT AFFINITY
@@ -939,59 +1023,68 @@ elif tab_idx == 3:
                 for j, col in enumerate(x_data):
                     heatmap_data.append([j, i, float(affinity_matrix.loc[row, col])])
             
-            heatmap = (
-                HeatMap()
-                .add_xaxis(x_data)
-                .add_yaxis(
-                    "親和力",
-                    y_data,
-                    heatmap_data,
-                    label_opts=opts.LabelOpts(is_show=False))
-                .set_global_opts(
-                    title_opts=opts.TitleOpts(title="產品親和力矩陣"),
-                    visualmap_opts=opts.VisualMapOpts(
-                        min_=0,
-                        max_=max([d[2] for d in heatmap_data]) if heatmap_data else 100,
-                        is_piecewise=False,
-                        orient="horizontal",
-                        pos_left="center",
-                        range_color=[COLORS['cyan'], COLORS['teal'], COLORS['green']]
-                    ),
-                    xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(color="#94a3b8")),
-                    yaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(color="#94a3b8"))
-                )
+            # Convert to 2D array for Plotly
+            z_values = affinity_matrix.values.tolist()
+            
+            # Use Plotly for heatmap with better colors
+            fig_heatmap = go.Figure(data=go.Heatmap(
+                z=z_values,
+                x=x_data,
+                y=y_data,
+                colorscale=[[0, '#1e3a5f'], [0.2, '#00d4ff'], [0.4, '#00e5c4'], [0.6, '#ffc107'], [0.8, '#ff6b35'], [1, '#ef4444']],
+                colorbar=dict(title=dict(text='親和力', font=dict(color='#00d4ff')), tickfont=dict(color='#00d4ff')),
+                hovertemplate='<b>%{x}</b> x <b>%{y}</b><br>親和力: %{z:.2f}<extra></extra>'
+            ))
+            fig_heatmap.update_layout(
+                title=dict(text='🔥 產品親和力矩陣', font=dict(color='#f1f5f9', size=18)),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='#94a3b8'),
+                xaxis=dict(title='', tickfont=dict(color='#00d4ff')),
+                yaxis=dict(title='', tickfont=dict(color='#00d4ff'), autorange='reversed'),
+                height=500,
+                margin=dict(t=60, b=50, l=80, r=20)
             )
-            st_echarts(options=chart_to_dict(heatmap), height="500px")
+            st.plotly_chart(fig_heatmap, width="stretch")
         
         st.subheader("🔥 熱門產品組合 (Top 10)")
         top_rules = df_affinity.nlargest(10, 'affinity_score') if 'affinity_score' in df_affinity.columns else df_affinity.head(10)
         display_cols = [c for c in ['cat1', 'cat2', 'co_occurrence_count', 'affinity_score'] if c in top_rules.columns]
         if display_cols:
-            st.dataframe(top_rules[display_cols], use_container_width=True)
+            st.dataframe(top_rules[display_cols], width="stretch")
     
     st.divider()
     
-    with st.expander("🔮 3D 產品分析 (進階)", expanded=True):
+    with st.expander("🔮 產品庫存分析 (進階)", expanded=True):
         if not df_inventory.empty and all(col in df_inventory.columns for col in ['cost_price', 'stock_quantity', 'selling_price']):
             fig_prod_3d = go.Figure(data=[go.Scatter3d(
                 x=df_inventory['cost_price'],
                 y=df_inventory['stock_quantity'],
                 z=df_inventory['selling_price'],
                 mode='markers',
-                marker=dict(size=8, color='#00e5c4', opacity=0.8),
+                marker=dict(
+                    size=8,
+                    color=df_inventory['stock_quantity'],
+                    colorscale='Jet',
+                    opacity=0.85,
+                    colorbar=dict(title=dict(text='庫存量', font=dict(color="#00d4ff")), tickfont=dict(color="#00d4ff"))
+                ),
                 text=df_inventory.get('name', 'Product'),
                 hovertemplate='<b>%{text}</b><br>Cost: %{x}<br>Stock: %{y}<br>Price: %{z}<extra></extra>'
             )])
             fig_prod_3d.update_layout(
-                title="3D 產品庫存分析",
+                title=dict(text="🔮 產品庫存 3D 分析", font=dict(color="#f1f5f9", size=18)),
                 scene=dict(
-                    xaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text='成本', font=dict(color="#00d4ff"))),
-                    yaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text='庫存', font=dict(color="#00d4ff"))),
-                    zaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text='售價', font=dict(color="#00d4ff"))),
+                    xaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text='成本 ($)', font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
+                    yaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text='庫存 (件)', font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
+                    zaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text='售價 ($)', font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
                 ),
-                paper_bgcolor="#0a1628", font=dict(color="#94a3b8"), height=500
+                paper_bgcolor="#0a1628", font=dict(color="#94a3b8"), height=550,
+                margin=dict(l=0, r=0, t=50, b=0)
             )
-            st.plotly_chart(fig_prod_3d, use_container_width=True)
+            st.plotly_chart(fig_prod_3d, width="stretch")
+        else:
+            st.markdown(render_empty_state("暫無產品庫存數據", "🛒"), unsafe_allow_html=True)
 
 # ============================================================
 # TAB 5: FUNNEL
@@ -1007,20 +1100,29 @@ elif tab_idx == 4:
         stages = stages[::-1]
         counts = counts[::-1]
         
-        funnel = (
-            Funnel()
-            .add(
-                "客戶旅程",
-                [list(z) for z in zip(stages, counts)],
-                label_opts=opts.LabelOpts(position="inside", formatter="{b}: {c}", color="#94a3b8"))
-            .set_global_opts(
-                title_opts=opts.TitleOpts(title="轉化率漏斗"),
-                legend_opts=opts.LegendOpts(textstyle_opts=opts.TextStyleOpts(color="#94a3b8")))
-            .set_series_opts(
-                itemstyle_opts=opts.ItemStyleOpts(color=COLORS['cyan'])
-            )
+        # Funnel colors - vibrant gradient from green to red
+        funnel_colors = ['#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#ef4444']
+        
+        # Use Plotly for funnel chart with custom colors
+        fig_funnel = go.Figure(data=[go.Funnel(
+            y=stages,
+            x=counts,
+            marker=dict(color=funnel_colors[:len(stages)]),
+            textinfo='value+percent total',
+            textfont=dict(color='#f1f5f9'),
+            hovertemplate='<b>%{y}</b><br>數量: %{x}<br>佔比: %{percentTotal}<extra></extra>'
+        )])
+        fig_funnel.update_layout(
+            title=dict(text='📊 轉化率漏斗', font=dict(color='#f1f5f9', size=18)),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#94a3b8'),
+            yaxis=dict(tickfont=dict(color='#00d4ff')),
+            xaxis=dict(title=dict(text='用戶數', font=dict(color='#00d4ff')), tickfont=dict(color='#00d4ff'), gridcolor='rgba(0, 212, 255, 0.2)'),
+            height=500,
+            margin=dict(t=60, b=40, l=80, r=20)
         )
-        st_echarts(options=chart_to_dict(funnel), height="500px")
+        st.plotly_chart(fig_funnel, width="stretch")
         
         st.subheader("📉 各階段流失率")
         dropoff_df = pd.DataFrame(df_journey[df_journey['dropoff_rate'] > 0][['stage', 'dropoff_rate']])
@@ -1029,44 +1131,62 @@ elif tab_idx == 4:
             stages_drop = dropoff_df['階段'].astype(str).tolist()
             rates = dropoff_df['流失率 %'].tolist()
             
-            bar_chart = (
-                Bar()
-                .add_xaxis(stages_drop)
-                .add_yaxis("流失率 %", rates,
-                          itemstyle_opts=opts.ItemStyleOpts(color=COLORS['red']))
-                .set_global_opts(
-                    title_opts=opts.TitleOpts(title="各階段流失率"),
-                    xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(color="#94a3b8")),
-                    yaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(color="#94a3b8"),
-                                            splitline_opts=opts.SplitLineOpts(is_show=True, linestyle_opts=opts.LineStyleOpts(color="rgba(30, 58, 95, 0.5)"))))
-                .set_series_opts(
-                    label_opts=opts.LabelOpts(is_show=True, position="right", color="#ef4444")
-                )
+            # Dropoff colors - vibrant gradient from yellow to red
+            dropoff_colors = ['#fbbf24', '#f59e0b', '#f97316', '#ef4444', '#dc2626', '#b91c1c']
+            
+            # Use Plotly for dropoff bar chart
+            fig_dropoff = go.Figure(data=[go.Bar(
+                x=rates,
+                y=stages_drop,
+                orientation='h',
+                marker_color=dropoff_colors[:len(rates)],
+                text=[f'{r:.1f}%' for r in rates],
+                textposition='outside',
+                textfont=dict(color='#ef4444')
+            )])
+            fig_dropoff.update_layout(
+                title=dict(text='📉 各階段流失率', font=dict(color='#f1f5f9', size=18)),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='#94a3b8'),
+                xaxis=dict(title=dict(text='流失率 %', font=dict(color='#00d4ff')), tickfont=dict(color='#00d4ff'), gridcolor='rgba(0, 212, 255, 0.2)'),
+                yaxis=dict(tickfont=dict(color='#00d4ff')),
+                height=350,
+                margin=dict(t=60, b=40, l=120, r=60)
             )
-            st_echarts(options=chart_to_dict(bar_chart), height="350px")
+            st.plotly_chart(fig_dropoff, width="stretch")
     
     st.divider()
     
-    with st.expander("🔮 3D 漏斗分析 (進階)", expanded=True):
+    with st.expander("🔮 客戶旅程分析 (進階)", expanded=True):
         if not df_journey.empty:
             fig_journey_3d = go.Figure(data=[go.Scatter3d(
                 x=df_journey['stage'].astype('category').cat.codes,
                 y=[1] * len(df_journey),
                 z=df_journey['count'],
                 mode='markers+lines',
-                marker=dict(size=14, color='#7c3aed', opacity=0.8),
+                marker=dict(
+                    size=14,
+                    color=df_journey['count'],
+                    colorscale='Jet',
+                    opacity=0.85,
+                    colorbar=dict(title=dict(text='用戶數', font=dict(color="#00d4ff")), tickfont=dict(color="#00d4ff"))
+                ),
                 line=dict(color='#00d4ff', width=3)
             )])
             fig_journey_3d.update_layout(
-                title="3D 客戶旅程",
+                title=dict(text="🔮 客戶旅程 3D 分析", font=dict(color="#f1f5f9", size=18)),
                 scene=dict(
-                    xaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text='階段', font=dict(color="#00d4ff"))),
-                    yaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text='維度', font=dict(color="#00d4ff"))),
-                    zaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text='用戶數', font=dict(color="#00d4ff"))),
+                    xaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text='階段', font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
+                    yaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text='維度', font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
+                    zaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text='用戶數', font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
                 ),
-                paper_bgcolor="#0a1628", font=dict(color="#94a3b8"), height=500
+                paper_bgcolor="#0a1628", font=dict(color="#94a3b8"), height=550,
+                margin=dict(l=0, r=0, t=50, b=0)
             )
-            st.plotly_chart(fig_journey_3d, use_container_width=True)
+            st.plotly_chart(fig_journey_3d, width="stretch")
+        else:
+            st.markdown(render_empty_state("暫無旅程數據", "📊"), unsafe_allow_html=True)
 
 # ============================================================
 # TAB 6: SEASONALITY
@@ -1082,18 +1202,29 @@ elif tab_idx == 5:
             weekdays = sw['weekday'].astype(str).tolist()
             revenues = sw['total_revenue'].fillna(0).tolist()
             
-            bar_chart = (
-                Bar()
-                .add_xaxis(weekdays)
-                .add_yaxis("營收", revenues,
-                          itemstyle_opts=opts.ItemStyleOpts(color=COLORS['teal']))
-                .set_global_opts(
-                    title_opts=opts.TitleOpts(title="每週銷售模式"),
-                    xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(color="#94a3b8")),
-                    yaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(color="#94a3b8"),
-                                            splitline_opts=opts.SplitLineOpts(is_show=True, linestyle_opts=opts.LineStyleOpts(color="rgba(30, 58, 95, 0.5)"))))
+            # Weekly pattern colors - vibrant distinct colors for each day
+            weekly_colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#8b5cf6']
+            
+            # Use Plotly for weekly bar chart
+            fig_weekly = go.Figure(data=[go.Bar(
+                x=weekdays,
+                y=revenues,
+                marker_color=weekly_colors[:len(weekdays)],
+                text=[format_number(r) for r in revenues],
+                textposition='outside',
+                textfont=dict(color='#f1f5f9')
+            )])
+            fig_weekly.update_layout(
+                title=dict(text='📅 每週銷售模式', font=dict(color='#f1f5f9', size=18)),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='#94a3b8'),
+                xaxis=dict(tickfont=dict(color='#00d4ff')),
+                yaxis=dict(title=dict(text='營收', font=dict(color='#00d4ff')), tickfont=dict(color='#00d4ff'), gridcolor='rgba(0, 212, 255, 0.2)'),
+                height=350,
+                margin=dict(t=60, b=40, l=50, r=20)
             )
-            st_echarts(options=chart_to_dict(bar_chart), height="350px")
+            st.plotly_chart(fig_weekly, width="stretch")
     
     with c2:
         st.subheader("⏰ 每小時銷售模式")
@@ -1101,70 +1232,137 @@ elif tab_idx == 5:
             hours = df_season_h['hour'].tolist()
             hourly_rev = df_season_h['total_revenue'].fillna(0).tolist()
             
-            line_chart = (
-                Line()
-                .add_xaxis(hours)
-                .add_yaxis(
-                    "營收",
-                    hourly_rev,
-                    symbol="circle",
-                    symbol_size=8,
-                    linestyle_opts=opts.LineStyleOpts(color=COLORS['cyan'], width=3),
-                    itemstyle_opts=opts.ItemStyleOpts(color=COLORS['cyan']),
-                    markarea_opts=opts.MarkAreaOpts(
-                        data=[
-                            [
-                                opts.MarkAreaItem(name="黃金時段", x="19"),
-                                opts.MarkAreaItem(x="22"),
-                            ]
-                        ],
-                        itemstyle_opts=opts.ItemStyleOpts(color="rgba(0, 230, 118, 0.15)")
-                    )
-                )
-                .set_global_opts(
-                    title_opts=opts.TitleOpts(title="每小時銷售模式"),
-                    xaxis_opts=opts.AxisOpts(type_="category", axislabel_opts=opts.LabelOpts(color="#94a3b8"),
-                                            splitline_opts=opts.SplitLineOpts(is_show=True, linestyle_opts=opts.LineStyleOpts(color="rgba(30, 58, 95, 0.5)"))),
-                    yaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(color="#94a3b8"),
-                                            splitline_opts=opts.SplitLineOpts(is_show=True, linestyle_opts=opts.LineStyleOpts(color="rgba(30, 58, 95, 0.5)"))),
-                    legend_opts=opts.LegendOpts(textstyle_opts=opts.TextStyleOpts(color="#94a3b8")),
-                    tooltip_opts=opts.TooltipOpts(trigger="axis"))
+            # Use Plotly for line chart
+            fig_hourly = go.Figure()
+            fig_hourly.add_trace(go.Scatter(
+                x=hours,
+                y=hourly_rev,
+                mode='lines+markers',
+                name='營收',
+                line=dict(color='#00d4ff', width=3),
+                marker=dict(color='#00d4ff', size=8, symbol='circle'),
+                hovertemplate='<b>小時: %{x}</b><br>營收: %{y:,.0f}<extra></extra>'
+            ))
+            
+            # Add golden hour highlight
+            fig_hourly.add_vrect(
+                x0=19, x1=22,
+                fillcolor="rgba(0, 230, 118, 0.15)",
+                layer="below",
+                line_width=0,
+                annotation_text="黃金時段",
+                annotation_position="top left",
+                annotation_font_color="#00e676"
             )
-            st_echarts(options=chart_to_dict(line_chart), height="350px")
+            
+            fig_hourly.update_layout(
+                title=dict(text='⏰ 每小時銷售模式', font=dict(color='#f1f5f9', size=18)),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='#94a3b8'),
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(color='#00d4ff', size=12, family='Arial Black')),
+                xaxis=dict(
+                    title=dict(text='小時 (0-23)', font=dict(color='#00d4ff')),
+                    tickfont=dict(color='#00d4ff'),
+                    gridcolor='rgba(0, 212, 255, 0.2)',
+                    dtick=2
+                ),
+                yaxis=dict(
+                    title=dict(text='營收', font=dict(color='#00d4ff')),
+                    tickfont=dict(color='#00d4ff'),
+                    gridcolor='rgba(0, 212, 255, 0.2)'
+                ),
+                height=350,
+                margin=dict(t=80, b=50, l=60, r=20)
+            )
+            st.plotly_chart(fig_hourly, width="stretch")
     
     st.divider()
     
-    with st.expander("🔮 3D 季節性分析 (進階)", expanded=True):
+    with st.expander("🔮 季節性銷售分析 (進階)", expanded=True):
         if not df_season_h.empty and 'hour' in df_season_h.columns and 'total_revenue' in df_season_h.columns:
             fig_season_3d = go.Figure(data=[go.Scatter3d(
                 x=df_season_h['hour'],
                 y=df_season_h['hour'] % 7,
                 z=df_season_h['total_revenue'],
                 mode='markers',
-                marker=dict(size=12, color='#7c3aed', opacity=0.8)
+                marker=dict(
+                    size=12,
+                    color=df_season_h['total_revenue'],
+                    colorscale='Jet',
+                    opacity=0.85,
+                    colorbar=dict(title=dict(text='銷售額', font=dict(color="#00d4ff")), tickfont=dict(color="#00d4ff"))
+                )
             )])
             fig_season_3d.update_layout(
-                title="3D 季節性銷售分析",
+                title=dict(text="🔮 季節性銷售 3D 分析", font=dict(color="#f1f5f9", size=18)),
                 scene=dict(
-                    xaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text='小時', font=dict(color="#00d4ff"))),
-                    yaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text='星期', font=dict(color="#00d4ff"))),
-                    zaxis=dict(backgroundcolor="#0a1628", gridcolor="#00d4ff", title=dict(text='銷售額', font=dict(color="#00d4ff"))),
+                    xaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text='小時 (0-23)', font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
+                    yaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text='星期 (0-6)', font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
+                    zaxis=dict(backgroundcolor="#0a1628", gridcolor="rgba(0, 212, 255, 0.3)", title=dict(text='銷售額 ($)', font=dict(color="#00d4ff")), tickfont=dict(color="#94a3b8")),
                 ),
-                paper_bgcolor="#0a1628", font=dict(color="#94a3b8"), height=500
+                paper_bgcolor="#0a1628", font=dict(color="#94a3b8"), height=550,
+                margin=dict(l=0, r=0, t=50, b=0)
             )
-            st.plotly_chart(fig_season_3d, use_container_width=True)
+            st.plotly_chart(fig_season_3d, width="stretch")
+        else:
+            st.markdown(render_empty_state("暫無季節性數據", "📈"), unsafe_allow_html=True)
 
 # ============================================================
-# FOOTER
+# PROFESSIONAL FOOTER
 # ============================================================
 st.divider()
 st.markdown("""
-<div style="text-align: center; padding: 20px; color: #64748b; font-size: 12px;">
-    🏆 3C E-Commerce AI Lakehouse v4 Enterprise | 
-    <span style="color: #00d4ff;">PostgreSQL</span> + 
-    <span style="color: #00e676;">MongoDB</span> + 
-    <span style="color: #7c3aed;">PySpark MLlib</span>
-    <br>
-    <span style="color: #64748b;">Built with Streamlit | Last Updated: """ + datetime.now().strftime('%Y-%m-%d %H:%M') + """</span>
+<style>
+    .footer-container {
+        background: linear-gradient(135deg, rgba(10, 22, 40, 0.8), rgba(18, 38, 64, 0.8));
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(0, 212, 255, 0.1);
+        border-radius: 12px;
+        padding: 24px;
+        text-align: center;
+    }
+    .footer-logo {
+        font-size: 24px;
+        margin-bottom: 12px;
+    }
+    .footer-tech {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin: 16px 0;
+    }
+    .tech-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    .tech-pg { background: rgba(0, 212, 255, 0.2); color: #00d4ff; }
+    .tech-mongo { background: rgba(0, 229, 196, 0.2); color: #00e5c4; }
+    .tech-pyspark { background: rgba(124, 58, 237, 0.2); color: #7c3aed; }
+    .tech-streamlit { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+    .footer-copyright {
+        color: #64748b;
+        font-size: 11px;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(100, 116, 139, 0.2);
+    }
+</style>
+<div class="footer-container">
+    <div class="footer-logo">🏆 3C E-Commerce AI Lakehouse</div>
+    <div style="color: #94a3b8; font-size: 13px;">Enterprise-Grade Data Intelligence Platform</div>
+    <div class="footer-tech">
+        <span class="tech-badge tech-pg">PostgreSQL 14</span>
+        <span class="tech-badge tech-mongo">MongoDB 6.0</span>
+        <span class="tech-badge tech-pyspark">PySpark MLlib</span>
+        <span class="tech-badge tech-streamlit">Streamlit 2.0</span>
+    </div>
+    <div class="footer-copyright">
+        © 2025 Albert Prometheus | Built with Streamlit | Last Updated: """ + datetime.now().strftime('%Y-%m-%d %H:%M') + """
+    </div>
 </div>
 """, unsafe_allow_html=True)
