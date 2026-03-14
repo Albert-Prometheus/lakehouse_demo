@@ -10,6 +10,8 @@ SQLAlchemy>=2.0.29
 # Dashboard / Web App
 streamlit>=1.33.0
 plotly>=5.20.0
+pyecharts>=2.0.0
+streamlit-echarts>=0.4.0
 
 # Mock Data Generation
 Faker>=24.8.0
